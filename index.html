@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disk Scheduling Graph Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <style>
+        .path-line { 
+            stroke-dasharray: 3000; 
+            stroke-dashoffset: 3000; 
+            animation: draw 2s ease-out forwards; 
+        }
+        @keyframes draw { to { stroke-dashoffset: 0; } }
+        .tab-active { border-b-4 border-blue-600 text-blue-600; }
+        .dark .tab-active { border-b-4 border-blue-400 text-blue-400; }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        .transition-colors { transition: background-color 0.3s, border-color 0.3s, color 0.3s; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 min-h-screen font-sans text-slate-900 dark:text-slate-100 transition-colors">
+
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="text-center md:text-left">
+                <h1 class="text-4xl font-extrabold text-slate-800 dark:text-white mb-2">Disk Scheduling Visualizer</h1>
+                <p class="text-slate-600 dark:text-slate-400">Visualize and compare head movement algorithms in real-time.</p>
+            </div>
+            <button onclick="toggleDarkMode()" class="p-3 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 hover:scale-110 transition">
+                <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500 hidden dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" />
+                </svg>
+                <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-700 block dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+            </button>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- Sidebar Controls -->
+            <aside class="lg:col-span-1 space-y-6">
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+                    <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                        </svg>
+                        Configuration
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Request Queue</label>
+                            <input id="inputQueue" type="text" value="86, 1470, 913, 1774, 948, 1509, 1022, 1750, 130" class="w-full p-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Starting Head Position</label>
+                            <input id="inputHead" type="number" value="143" class="w-full p-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Max Track (Disk Size)</label>
+                            <input id="inputMax" type="number" value="1999" class="w-full p-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition">
+                            <p class="text-[10px] text-slate-400 mt-1">*Auto-scales if requests exceed this value.</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Direction (SCAN/LOOK)</label>
+                            <select id="inputDir" class="w-full p-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition">
+                                <option value="left">Left (Towards 0)</option>
+                                <option value="right" selected>Right (Towards Max)</option>
+                            </select>
+                        </div>
+
+                        <button onclick="generateGraphs()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transform transition active:scale-95">
+                            Update Graph
+                        </button>
+                    </div>
+                </div>
+
+                <div id="statsPanel" class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+                    <h2 class="text-lg font-bold mb-4">Total Seek Time</h2>
+                    <div id="statsContent" class="text-sm space-y-2"></div>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="lg:col-span-3 space-y-6">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
+                    <div class="flex border-b dark:border-slate-700 overflow-x-auto scrollbar-hide" id="tabsHeader">
+                        <button onclick="switchTab('FCFS')" id="tab-FCFS" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition tab-active">FCFS</button>
+                        <button onclick="switchTab('SSTF')" id="tab-SSTF" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">SSTF</button>
+                        <button onclick="switchTab('SCAN')" id="tab-SCAN" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">SCAN</button>
+                        <button onclick="switchTab('CSCAN')" id="tab-CSCAN" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">C-SCAN</button>
+                        <button onclick="switchTab('LOOK')" id="tab-LOOK" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">LOOK</button>
+                        <button onclick="switchTab('CLOOK')" id="tab-CLOOK" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">C-LOOK</button>
+                    </div>
+
+                    <div class="p-4 md:p-8">
+                        <div id="graph-meta" class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <h3 id="currentAlgoTitle" class="text-2xl font-bold text-slate-800 dark:text-white">FCFS</h3>
+                            <div class="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-4 py-1.5 rounded-full text-sm font-bold border border-blue-200 dark:border-blue-800" id="thmDisplay">
+                                Total Head Movement: 0
+                            </div>
+                        </div>
+                        
+                        <div class="relative w-full border-t border-l border-slate-200 dark:border-slate-700 pt-8 pl-8 rounded-br-lg" style="height: 500px;">
+                            <svg id="visualizer" width="100%" height="100%" viewBox="0 0 1000 450" preserveAspectRatio="none" class="overflow-visible">
+                                <g id="gridLayer"></g>
+                                <g id="pathLayer"></g>
+                                <g id="pointLayer"></g>
+                            </svg>
+                        </div>
+                        
+                        <div class="mt-6 flex justify-between text-xs text-slate-500 dark:text-slate-400 font-mono uppercase tracking-widest">
+                            <span>Track 0</span>
+                            <span id="maxTrackDisplay">Track 199</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 dark:bg-slate-950 text-white p-6 rounded-2xl shadow-lg border border-slate-700">
+                    <h3 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-2">Sequence Order</h3>
+                    <p id="sequenceDisplay" class="font-mono text-lg break-all text-blue-400 leading-relaxed">
+                        Waiting...
+                    </p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        let currentAlgorithm = 'FCFS';
+        let simulationData = {};
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+            renderGraph();
+        }
+
+        function calculateFCFS(queue, head) {
+            let sequence = [head, ...queue];
+            let thm = 0;
+            for (let i = 0; i < sequence.length - 1; i++) thm += Math.abs(sequence[i] - sequence[i+1]);
+            return { sequence, thm, jumps: [] };
+        }
+
+        function calculateSSTF(queue, head) {
+            let sequence = [head];
+            let tempQueue = [...queue];
+            let thm = 0;
+            let current = head;
+            while (tempQueue.length > 0) {
+                let closest = tempQueue.reduce((prev, curr) => Math.abs(curr - current) < Math.abs(prev - current) ? curr : prev);
+                thm += Math.abs(closest - current);
+                current = closest;
+                sequence.push(current);
+                tempQueue = tempQueue.filter((v, i, a) => i !== tempQueue.indexOf(closest));
+            }
+            return { sequence, thm, jumps: [] };
+        }
+
+        function calculateSCAN(queue, head, max, dir) {
+            let left = queue.filter(q => q < head).sort((a,b) => b-a);
+            let right = queue.filter(q => q > head).sort((a,b) => a-b);
+            let sequence = [head];
+            if (dir === 'left') {
+                sequence = [...sequence, ...left, 0, ...right];
+            } else {
+                sequence = [...sequence, ...right, max, ...left];
+            }
+            let thm = 0;
+            for (let i = 0; i < sequence.length - 1; i++) thm += Math.abs(sequence[i] - sequence[i+1]);
+            return { sequence, thm, jumps: [] };
+        }
+
+        function calculateCSCAN(queue, head, max, dir) {
+            let left = queue.filter(q => q < head).sort((a,b) => a-b);
+            let right = queue.filter(q => q > head).sort((a,b) => a-b);
+            let sequence = [head];
+            let jumps = [];
+            if (dir === 'right') {
+                sequence = [...sequence, ...right, max];
+                jumps.push(sequence.length - 1);
+                sequence = [...sequence, 0, ...left];
+            } else {
+                sequence = [...sequence, ...left.reverse(), 0];
+                jumps.push(sequence.length - 1);
+                sequence = [...sequence, max, ...right.reverse()];
+            }
+            let thm = 0;
+            for (let i = 0; i < sequence.length - 1; i++) {
+                if (!jumps.includes(i)) thm += Math.abs(sequence[i] - sequence[i+1]);
+            }
+            return { sequence, thm, jumps };
+        }
+
+        function calculateLOOK(queue, head, dir) {
+            let left = queue.filter(q => q < head).sort((a,b) => b-a);
+            let right = queue.filter(q => q > head).sort((a,b) => a-b);
+            let sequence = [head];
+            if (dir === 'left') {
+                sequence = [...sequence, ...left, ...right];
+            } else {
+                sequence = [...sequence, ...right, ...left];
+            }
+            let thm = 0;
+            for (let i = 0; i < sequence.length - 1; i++) thm += Math.abs(sequence[i] - sequence[i+1]);
+            return { sequence, thm, jumps: [] };
+        }
+
+        function calculateCLOOK(queue, head, dir) {
+            let left = queue.filter(q => q < head).sort((a,b) => a-b);
+            let right = queue.filter(q => q > head).sort((a,b) => a-b);
+            let sequence = [head];
+            let jumps = [];
+            if (dir === 'right') {
+                sequence = [...sequence, ...right];
+                if (left.length > 0) {
+                    jumps.push(sequence.length - 1);
+                    sequence = [...sequence, ...left];
+                }
+            } else {
+                sequence = [...sequence, ...left.reverse()];
+                if (right.length > 0) {
+                    jumps.push(sequence.length - 1);
+                    sequence = [...sequence, ...right.reverse()];
+                }
+            }
+            let thm = 0;
+            for (let i = 0; i < sequence.length - 1; i++) {
+                if (!jumps.includes(i)) thm += Math.abs(sequence[i] - sequence[i+1]);
+            }
+            return { sequence, thm, jumps };
+        }
+
+        function generateGraphs() {
+            const queueRaw = document.getElementById('inputQueue').value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+            const head = parseInt(document.getElementById('inputHead').value);
+            let max = parseInt(document.getElementById('inputMax').value);
+            const dir = document.getElementById('inputDir').value;
+
+            // AUTO-SCALING LOGIC: If input values exceed Max Track, update Max Track
+            const highestRequest = Math.max(...queueRaw, head);
+            if (highestRequest > max) {
+                max = highestRequest;
+                document.getElementById('inputMax').value = max;
+            }
+
+            simulationData = {
+                FCFS: calculateFCFS(queueRaw, head),
+                SSTF: calculateSSTF(queueRaw, head),
+                SCAN: calculateSCAN(queueRaw, head, max, dir),
+                CSCAN: calculateCSCAN(queueRaw, head, max, dir),
+                LOOK: calculateLOOK(queueRaw, head, dir),
+                CLOOK: calculateCLOOK(queueRaw, head, dir),
+                maxDisk: max
+            };
+
+            updateStats();
+            renderGraph();
+        }
+
+        function updateStats() {
+            const content = document.getElementById('statsContent');
+            content.innerHTML = '';
+            const algos = ['FCFS', 'SSTF', 'SCAN', 'CSCAN', 'LOOK', 'CLOOK'];
+            algos.forEach(key => {
+                const data = simulationData[key];
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center p-2.5 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700";
+                div.innerHTML = `<span class="font-medium">${key}</span><span class="text-blue-600 dark:text-blue-400 font-bold">${data.thm}</span>`;
+                content.appendChild(div);
+            });
+        }
+
+        function switchTab(algo) {
+            document.querySelectorAll('#tabsHeader button').forEach(btn => btn.classList.remove('tab-active'));
+            document.getElementById(`tab-${algo}`).classList.add('tab-active');
+            currentAlgorithm = algo;
+            const titles = { FCFS: 'First Come First Serve', SSTF: 'Shortest Seek Time First', SCAN: 'SCAN (Elevator)', CSCAN: 'Circular SCAN', LOOK: 'LOOK', CLOOK: 'Circular LOOK' };
+            document.getElementById('currentAlgoTitle').innerText = titles[algo];
+            renderGraph();
+        }
+
+        function renderGraph() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const data = simulationData[currentAlgorithm];
+            const max = simulationData.maxDisk;
+            const svg = document.getElementById('visualizer');
+            const gridLayer = document.getElementById('gridLayer');
+            const pathLayer = document.getElementById('pathLayer');
+            const pointLayer = document.getElementById('pointLayer');
+
+            gridLayer.innerHTML = ''; pathLayer.innerHTML = ''; pointLayer.innerHTML = '';
+            document.getElementById('maxTrackDisplay').innerText = `Track ${max}`;
+            document.getElementById('thmDisplay').innerText = `Total Head Movement: ${data.thm}`;
+            document.getElementById('sequenceDisplay').innerText = data.sequence.join(' → ');
+
+            // Grid
+            const steps = 10;
+            const gridColor = isDark ? '#334155' : '#e2e8f0';
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+            for (let i = 0; i <= steps; i++) {
+                const x = (i / steps) * 1000;
+                const val = Math.round((i / steps) * max);
+                gridLayer.innerHTML += `
+                    <line x1="${x}" y1="0" x2="${x}" y2="450" stroke="${gridColor}" stroke-width="1" stroke-dasharray="4" />
+                    <text x="${x}" y="-15" font-size="12" fill="${textColor}" text-anchor="middle" font-family="monospace">${val}</text>
+                `;
+            }
+
+            const points = data.sequence.map((track, index) => ({
+                x: (track / max) * 1000,
+                y: (index / (data.sequence.length - 1)) * 400 + 25,
+                track
+            }));
+
+            // Path Construction
+            let currentPath = `M ${points[0].x} ${points[0].y}`;
+            for (let i = 1; i < points.length; i++) {
+                if (data.jumps.includes(i - 1)) {
+                    pathLayer.innerHTML += `<path d="${currentPath}" fill="none" stroke="#2563eb" stroke-width="3" class="path-line" />`;
+                    pathLayer.innerHTML += `<line x1="${points[i-1].x}" y1="${points[i-1].y}" x2="${points[i].x}" y2="${points[i].y}" stroke="${isDark ? '#475569' : '#94a3b8'}" stroke-width="2" stroke-dasharray="8,4" />`;
+                    currentPath = `M ${points[i].x} ${points[i].y}`;
+                } else {
+                    currentPath += ` L ${points[i].x} ${points[i].y}`;
+                }
+            }
+            pathLayer.innerHTML += `<path d="${currentPath}" fill="none" stroke="#2563eb" stroke-width="3" class="path-line" />`;
+
+            // Points
+            points.forEach((p, i) => {
+                const isStart = i === 0;
+                const isEnd = i === points.length - 1;
+                const color = isStart ? '#ef4444' : (isEnd ? '#22c55e' : '#3b82f6');
+                pointLayer.innerHTML += `
+                    <circle cx="${p.x}" cy="${p.y}" r="5" fill="${isDark ? '#1e293b' : 'white'}" stroke="${color}" stroke-width="2.5" />
+                    <text x="${p.x + 12}" y="${p.y + 4}" font-size="11" font-weight="bold" fill="${color}" font-family="monospace">${p.track}</text>
+                `;
+            });
+        }
+
+        window.onload = generateGraphs;
+    </script>
+</body>
