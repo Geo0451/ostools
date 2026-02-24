@@ -12,8 +12,8 @@
     </script>
     <style>
         .path-line { 
-            stroke-dasharray: 3000; 
-            stroke-dashoffset: 3000; 
+            stroke-dasharray: 4000; 
+            stroke-dashoffset: 4000; 
             animation: draw 2s ease-out forwards; 
         }
         @keyframes draw { to { stroke-dashoffset: 0; } }
@@ -22,16 +22,19 @@
         input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         
         .transition-colors { transition: background-color 0.3s, border-color 0.3s, color 0.3s; }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 min-h-screen font-sans text-slate-900 dark:text-slate-100 transition-colors">
 
-    <div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="max-w-7xl mx-auto px-4 py-8">
         <!-- Header -->
         <header class="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="text-center md:text-left">
                 <h1 class="text-4xl font-extrabold text-slate-800 dark:text-white mb-2">Disk Scheduling Visualizer</h1>
-                <p class="text-slate-600 dark:text-slate-400">Visualize and compare head movement algorithms in real-time.</p>
+                <p class="text-slate-600 dark:text-slate-400">Visualize and compare head movement algorithms with step-by-step arithmetic.</p>
             </div>
             <button onclick="toggleDarkMode()" class="p-3 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 hover:scale-110 transition">
                 <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500 hidden dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -43,9 +46,9 @@
             </button>
         </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <!-- Sidebar Controls -->
-            <aside class="lg:col-span-1 space-y-6">
+            <aside class="lg:col-span-3 space-y-6">
                 <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
                     <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -92,36 +95,57 @@
             </aside>
 
             <!-- Main Content -->
-            <main class="lg:col-span-3 space-y-6">
-                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
-                    <div class="flex border-b dark:border-slate-700 overflow-x-auto scrollbar-hide" id="tabsHeader">
-                        <button onclick="switchTab('FCFS')" id="tab-FCFS" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition tab-active">FCFS</button>
-                        <button onclick="switchTab('SSTF')" id="tab-SSTF" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">SSTF</button>
-                        <button onclick="switchTab('SCAN')" id="tab-SCAN" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">SCAN</button>
-                        <button onclick="switchTab('CSCAN')" id="tab-CSCAN" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">C-SCAN</button>
-                        <button onclick="switchTab('LOOK')" id="tab-LOOK" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">LOOK</button>
-                        <button onclick="switchTab('CLOOK')" id="tab-CLOOK" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">C-LOOK</button>
-                    </div>
+            <main class="lg:col-span-9 space-y-6">
+                <!-- Visualizer and Breakdown Container -->
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                    
+                    <!-- Graph Section -->
+                    <div class="xl:col-span-2 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors flex flex-col">
+                        <div class="flex border-b dark:border-slate-700 overflow-x-auto scrollbar-hide" id="tabsHeader">
+                            <button onclick="switchTab('FCFS')" id="tab-FCFS" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition tab-active">FCFS</button>
+                            <button onclick="switchTab('SSTF')" id="tab-SSTF" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">SSTF</button>
+                            <button onclick="switchTab('SCAN')" id="tab-SCAN" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">SCAN</button>
+                            <button onclick="switchTab('CSCAN')" id="tab-CSCAN" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">C-SCAN</button>
+                            <button onclick="switchTab('LOOK')" id="tab-LOOK" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">LOOK</button>
+                            <button onclick="switchTab('CLOOK')" id="tab-CLOOK" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">C-LOOK</button>
+                        </div>
 
-                    <div class="p-4 md:p-8">
-                        <div id="graph-meta" class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                            <h3 id="currentAlgoTitle" class="text-2xl font-bold text-slate-800 dark:text-white">FCFS</h3>
-                            <div class="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-4 py-1.5 rounded-full text-sm font-bold border border-blue-200 dark:border-blue-800" id="thmDisplay">
-                                Total Head Movement: 0
+                        <div class="p-4 md:p-8 flex-1">
+                            <div id="graph-meta" class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                <h3 id="currentAlgoTitle" class="text-2xl font-bold text-slate-800 dark:text-white">FCFS</h3>
+                                <div class="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-4 py-1.5 rounded-full text-sm font-bold border border-blue-200 dark:border-blue-800" id="thmDisplay">
+                                    Total Head Movement: 0
+                                </div>
+                            </div>
+                            
+                            <div class="relative w-full border-t border-l border-slate-200 dark:border-slate-700 pt-8 pl-8 rounded-br-lg" style="height: 450px;">
+                                <svg id="visualizer" width="100%" height="100%" viewBox="0 0 1000 450" preserveAspectRatio="none" class="overflow-visible">
+                                    <g id="gridLayer"></g>
+                                    <g id="pathLayer"></g>
+                                    <g id="pointLayer"></g>
+                                </svg>
+                            </div>
+                            
+                            <div class="mt-6 flex justify-between text-xs text-slate-500 dark:text-slate-400 font-mono uppercase tracking-widest">
+                                <span>Track 0</span>
+                                <span id="maxTrackDisplay">Track 1999</span>
                             </div>
                         </div>
-                        
-                        <div class="relative w-full border-t border-l border-slate-200 dark:border-slate-700 pt-8 pl-8 rounded-br-lg" style="height: 500px;">
-                            <svg id="visualizer" width="100%" height="100%" viewBox="0 0 1000 450" preserveAspectRatio="none" class="overflow-visible">
-                                <g id="gridLayer"></g>
-                                <g id="pathLayer"></g>
-                                <g id="pointLayer"></g>
-                            </svg>
+                    </div>
+
+                    <!-- Step-by-Step Arithmetic Section -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col transition-colors">
+                        <div class="p-6 border-b dark:border-slate-700">
+                            <h3 class="text-lg font-bold flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                                Arithmetic Breakdown
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-1">Calculated as |Current - Next|</p>
                         </div>
-                        
-                        <div class="mt-6 flex justify-between text-xs text-slate-500 dark:text-slate-400 font-mono uppercase tracking-widest">
-                            <span>Track 0</span>
-                            <span id="maxTrackDisplay">Track 199</span>
+                        <div id="breakdownContent" class="p-6 overflow-y-auto scrollbar-thin space-y-3 font-mono text-sm" style="max-height: 520px;">
+                            <!-- Arithmetic steps injected here -->
                         </div>
                     </div>
                 </div>
@@ -145,26 +169,41 @@
             renderGraph();
         }
 
-        function calculateFCFS(queue, head) {
-            let sequence = [head, ...queue];
+        // Calculation helper for thm with steps
+        function buildResult(sequence, jumps = []) {
             let thm = 0;
-            for (let i = 0; i < sequence.length - 1; i++) thm += Math.abs(sequence[i] - sequence[i+1]);
-            return { sequence, thm, jumps: [] };
+            let steps = [];
+            for (let i = 0; i < sequence.length - 1; i++) {
+                const start = sequence[i];
+                const end = sequence[i+1];
+                const diff = Math.abs(start - end);
+                const isJump = jumps.includes(i);
+                
+                if (!isJump) {
+                    thm += diff;
+                    steps.push({ start, end, diff, type: 'seek' });
+                } else {
+                    steps.push({ start, end, diff, type: 'jump' });
+                }
+            }
+            return { sequence, thm, steps, jumps };
+        }
+
+        function calculateFCFS(queue, head) {
+            return buildResult([head, ...queue]);
         }
 
         function calculateSSTF(queue, head) {
             let sequence = [head];
             let tempQueue = [...queue];
-            let thm = 0;
             let current = head;
             while (tempQueue.length > 0) {
                 let closest = tempQueue.reduce((prev, curr) => Math.abs(curr - current) < Math.abs(prev - current) ? curr : prev);
-                thm += Math.abs(closest - current);
                 current = closest;
                 sequence.push(current);
                 tempQueue = tempQueue.filter((v, i, a) => i !== tempQueue.indexOf(closest));
             }
-            return { sequence, thm, jumps: [] };
+            return buildResult(sequence);
         }
 
         function calculateSCAN(queue, head, max, dir) {
@@ -176,9 +215,7 @@
             } else {
                 sequence = [...sequence, ...right, max, ...left];
             }
-            let thm = 0;
-            for (let i = 0; i < sequence.length - 1; i++) thm += Math.abs(sequence[i] - sequence[i+1]);
-            return { sequence, thm, jumps: [] };
+            return buildResult(sequence);
         }
 
         function calculateCSCAN(queue, head, max, dir) {
@@ -195,11 +232,7 @@
                 jumps.push(sequence.length - 1);
                 sequence = [...sequence, max, ...right.reverse()];
             }
-            let thm = 0;
-            for (let i = 0; i < sequence.length - 1; i++) {
-                if (!jumps.includes(i)) thm += Math.abs(sequence[i] - sequence[i+1]);
-            }
-            return { sequence, thm, jumps };
+            return buildResult(sequence, jumps);
         }
 
         function calculateLOOK(queue, head, dir) {
@@ -211,9 +244,7 @@
             } else {
                 sequence = [...sequence, ...right, ...left];
             }
-            let thm = 0;
-            for (let i = 0; i < sequence.length - 1; i++) thm += Math.abs(sequence[i] - sequence[i+1]);
-            return { sequence, thm, jumps: [] };
+            return buildResult(sequence);
         }
 
         function calculateCLOOK(queue, head, dir) {
@@ -234,11 +265,7 @@
                     sequence = [...sequence, ...right.reverse()];
                 }
             }
-            let thm = 0;
-            for (let i = 0; i < sequence.length - 1; i++) {
-                if (!jumps.includes(i)) thm += Math.abs(sequence[i] - sequence[i+1]);
-            }
-            return { sequence, thm, jumps };
+            return buildResult(sequence, jumps);
         }
 
         function generateGraphs() {
@@ -247,7 +274,6 @@
             let max = parseInt(document.getElementById('inputMax').value);
             const dir = document.getElementById('inputDir').value;
 
-            // AUTO-SCALING LOGIC: If input values exceed Max Track, update Max Track
             const highestRequest = Math.max(...queueRaw, head);
             if (highestRequest > max) {
                 max = highestRequest;
@@ -298,11 +324,37 @@
             const gridLayer = document.getElementById('gridLayer');
             const pathLayer = document.getElementById('pathLayer');
             const pointLayer = document.getElementById('pointLayer');
+            const breakdown = document.getElementById('breakdownContent');
 
-            gridLayer.innerHTML = ''; pathLayer.innerHTML = ''; pointLayer.innerHTML = '';
+            gridLayer.innerHTML = ''; pathLayer.innerHTML = ''; pointLayer.innerHTML = ''; breakdown.innerHTML = '';
+            
             document.getElementById('maxTrackDisplay').innerText = `Track ${max}`;
             document.getElementById('thmDisplay').innerText = `Total Head Movement: ${data.thm}`;
             document.getElementById('sequenceDisplay').innerText = data.sequence.join(' → ');
+
+            // Render Arithmetic Breakdown
+            data.steps.forEach((step, idx) => {
+                const stepDiv = document.createElement('div');
+                if (step.type === 'jump') {
+                    stepDiv.className = "p-2 rounded border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 italic";
+                    stepDiv.innerHTML = `<span class="text-xs">Circular Reset</span><br>Jump: ${step.start} → ${step.end}`;
+                } else {
+                    stepDiv.className = "p-3 rounded-lg bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700 flex justify-between items-center";
+                    stepDiv.innerHTML = `
+                        <div class="flex flex-col">
+                            <span class="text-[10px] uppercase text-slate-400">Step ${idx + 1}</span>
+                            <span>|${step.start} - ${step.end}|</span>
+                        </div>
+                        <span class="text-blue-500 font-bold">= ${step.diff}</span>
+                    `;
+                }
+                breakdown.appendChild(stepDiv);
+            });
+            // Total Sum in breakdown
+            const totalDiv = document.createElement('div');
+            totalDiv.className = "mt-4 p-4 rounded-xl bg-blue-600 text-white font-bold flex justify-between items-center shadow-lg";
+            totalDiv.innerHTML = `<span>Total THM</span><span>${data.thm}</span>`;
+            breakdown.appendChild(totalDiv);
 
             // Grid
             const steps = 10;
@@ -351,3 +403,4 @@
         window.onload = generateGraphs;
     </script>
 </body>
+</html>
