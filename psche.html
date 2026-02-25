@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Process Scheduling Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    <style>
+        /* Alternating Gantt Animations */
+        .gantt-bar { 
+            opacity: 0;
+            animation-duration: 0.6s;
+            animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+            animation-fill-mode: forwards;
+        }
+
+        /* Odd segments: Bottom to Top */
+        .gantt-bar-odd {
+            transform-origin: bottom;
+            animation-name: grow-from-bottom;
+        }
+
+        /* Even segments: Top to Bottom */
+        .gantt-bar-even {
+            transform-origin: top;
+            animation-name: grow-from-top;
+        }
+
+        @keyframes grow-from-bottom {
+            from { transform: scaleY(0); opacity: 0; }
+            to { transform: scaleY(1); opacity: 1; }
+        }
+
+        @keyframes grow-from-top {
+            from { transform: scaleY(0); opacity: 0; }
+            to { transform: scaleY(1); opacity: 1; }
+        }
+
+        /* Custom Scrollbars */
+        .scrollbar-custom::-webkit-scrollbar { height: 6px; width: 6px; }
+        .scrollbar-custom::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-custom::-webkit-scrollbar-thumb { 
+            background: #cbd5e1; 
+            border-radius: 20px;
+        }
+        .dark .scrollbar-custom::-webkit-scrollbar-thumb { background: #334155; }
+        
+        .tab-active { border-b-4 border-indigo-600 text-indigo-600; }
+        .dark .tab-active { border-b-4 border-indigo-400 text-indigo-400; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 min-h-screen font-sans text-slate-900 dark:text-slate-100 transition-colors">
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="text-center md:text-left">
+                <h1 class="text-4xl font-extrabold text-slate-800 dark:text-white mb-2">Process Scheduler</h1>
+                <p class="text-slate-600 dark:text-slate-400">Visualize CPU scheduling with Gantt charts.</p>
+            </div>
+            <button onclick="document.documentElement.classList.toggle('dark')" class="p-3 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 hover:scale-110 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" />
+                </svg>
+            </button>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Input Sidebar -->
+            <aside class="lg:col-span-4 space-y-6">
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Process Input
+                    </h2>
+
+                    <div class="grid grid-cols-4 gap-2 mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        <div class="text-center">ID</div>
+                        <div class="text-center">Arrival</div>
+                        <div class="text-center">Burst</div>
+                        <div class="text-center">Priority</div>
+                    </div>
+                    
+                    <div id="processInputs" class="space-y-3 mb-4 max-h-[350px] overflow-y-auto scrollbar-custom pr-2">
+                        <!-- Dynamic inputs -->
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <button onclick="addProcess()" class="py-2 px-4 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 transition">+ Add Process</button>
+                        <button onclick="resetProcesses()" class="py-2 px-4 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 rounded-lg text-sm font-semibold hover:bg-red-100 transition">Reset</button>
+                    </div>
+
+                    <div class="space-y-4 pt-4 border-t dark:border-slate-700">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Time Quantum (for RR)</label>
+                            <input id="timeQuantum" type="number" value="2" min="1" class="w-full p-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <button id="runBtn" onclick="runSimulation()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95 disabled:opacity-50">Run Simulation</button>
+                        <p id="errorBox" class="text-xs text-red-500 hidden mt-2 text-center"></p>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Visualization Area -->
+            <main class="lg:col-span-8 space-y-6">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+                    <!-- Tabs -->
+                    <div class="flex border-b dark:border-slate-700 overflow-x-auto scrollbar-custom" id="algoTabs">
+                        <button onclick="updateTab('FCFS')" class="px-5 py-4 font-semibold transition whitespace-nowrap tab-active">FCFS</button>
+                        <button onclick="updateTab('SJF')" class="px-5 py-4 font-semibold transition whitespace-nowrap">SJF</button>
+                        <button onclick="updateTab('SRTF')" class="px-5 py-4 font-semibold transition whitespace-nowrap">SRTF (Pre)</button>
+                        <button onclick="updateTab('Priority')" class="px-5 py-4 font-semibold transition whitespace-nowrap">Priority</button>
+                        <button onclick="updateTab('PriorityPre')" class="px-5 py-4 font-semibold transition whitespace-nowrap">Priority (Pre)</button>
+                        <button onclick="updateTab('RR')" class="px-5 py-4 font-semibold transition whitespace-nowrap">Round Robin</button>
+                    </div>
+
+                    <div class="p-6 space-y-6">
+                        <!-- Stats & Title Header -->
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <div>
+                                <h3 id="viewTitle" class="text-2xl font-bold">First Come First Serve</h3>
+                                <span class="text-xs font-mono px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400" id="currentAlgoInfo">Non-Preemptive</span>
+                            </div>
+                            <div class="flex gap-6 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border dark:border-slate-700">
+                                <div class="text-right">
+                                    <p class="text-[10px] uppercase font-bold text-slate-400">Avg Turnaround</p>
+                                    <p id="avgTatDisplay" class="text-xl font-black text-indigo-600 dark:text-indigo-400">0.00</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[10px] uppercase font-bold text-slate-400">Avg Waiting</p>
+                                    <p id="avgWtDisplay" class="text-xl font-black text-emerald-600 dark:text-emerald-400">0.00</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Gantt Chart Section -->
+                        <div>
+                            <h4 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">Gantt Chart </h4>
+                            <div class="relative overflow-x-auto scrollbar-custom pb-2">
+                                <div id="ganttWrapper" class="min-w-full">
+                                    <div id="ganttChart" class="flex w-full h-16 bg-slate-100 dark:bg-slate-900 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
+                                        <!-- Gantt blocks -->
+                                    </div>
+                                    <div id="ganttTimeline" class="flex w-full mt-2 text-xs font-mono text-slate-500">
+                                        <!-- Timeline -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Results Table Section -->
+                        <div class="space-y-3">
+                            <h4 class="text-xs font-bold uppercase tracking-widest text-slate-400">Process Statistics</h4>
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                <!-- Sticky Header Table -->
+                                <table class="w-full text-left text-sm">
+                                    <thead class="bg-slate-50 dark:bg-slate-900/50">
+                                        <tr class="text-slate-400 border-b dark:border-slate-700">
+                                            <th class="py-3 px-4 w-1/4">Process</th>
+                                            <th class="py-3 px-2">Arrival</th>
+                                            <th class="py-3 px-2">Burst</th>
+                                            <th class="py-3 px-2">Finish</th>
+                                            <th class="py-3 px-2">TAT</th>
+                                            <th class="py-3 px-4">WT</th>
+                                        </tr>
+                                    </thead>
+                                </table>
+                                <!-- Scrollable Body -->
+                                <div class="max-h-[250px] overflow-y-auto scrollbar-custom">
+                                    <table class="w-full text-left text-sm">
+                                        <tbody id="processTableBody" class="divide-y dark:divide-slate-700">
+                                            <!-- Rows -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        let processes = [
+            { id: 1, arrival: 0, burst: 8, priority: 2 },
+            { id: 2, arrival: 1, burst: 4, priority: 1 },
+            { id: 3, arrival: 2, burst: 9, priority: 3 },
+            { id: 4, arrival: 3, burst: 5, priority: 2 }
+        ];
+        let currentAlgo = 'FCFS';
+        let results = {};
+
+        const processColors = [
+            '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
+            '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#4f46e5'
+        ];
+
+        function getProcessColor(id) {
+            if (id === 'Idle') return 'bg-slate-200 dark:bg-slate-800';
+            const index = (parseInt(id.replace('P', '')) - 1) % processColors.length;
+            return processColors[index];
+        }
+
+        function addProcess() {
+            const id = processes.length > 0 ? Math.max(...processes.map(p => p.id)) + 1 : 1;
+            processes.push({ id, arrival: 0, burst: 5, priority: 1 });
+            renderInputs();
+        }
+
+        function resetProcesses() {
+            processes = [{ id: 1, arrival: 0, burst: 5, priority: 1 }];
+            renderInputs();
+        }
+
+        function renderInputs() {
+            const container = document.getElementById('processInputs');
+            container.innerHTML = processes.map((p, i) => {
+                const color = getProcessColor(`P${p.id}`);
+                return `
+                <div class="grid grid-cols-4 gap-2 items-center bg-slate-50 dark:bg-slate-700/30 p-2 rounded-lg border dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors">
+                    <span class="text-xs font-bold text-center px-1 py-0.5 rounded text-white" style="background-color: ${color}">P${p.id}</span>
+                    <input type="number" min="0" value="${p.arrival}" onchange="updateP(${i}, 'arrival', this.value)" class="bg-transparent text-center text-sm outline-none w-full focus:bg-white dark:focus:bg-slate-700 rounded p-1">
+                    <input type="number" min="1" value="${p.burst}" onchange="updateP(${i}, 'burst', this.value)" class="bg-transparent text-center text-sm outline-none w-full focus:bg-white dark:focus:bg-slate-700 rounded p-1">
+                    <input type="number" min="0" value="${p.priority}" onchange="updateP(${i}, 'priority', this.value)" class="bg-transparent text-center text-sm outline-none w-full focus:bg-white dark:focus:bg-slate-700 rounded p-1">
+                </div>`;
+            }).join('');
+        }
+
+        function updateP(index, field, value) {
+            processes[index][field] = parseInt(value) || 0;
+        }
+
+        /* --- Schedulers --- */
+        function solveFCFS(procs) {
+            let sorted = procs.map(p => ({...p})).sort((a, b) => a.arrival - b.arrival || a.id - b.id);
+            let time = 0, timeline = [];
+            sorted.forEach(p => {
+                if (time < p.arrival) { timeline.push({ id: 'Idle', start: time, end: p.arrival }); time = p.arrival; }
+                let start = time; time += p.burst;
+                p.finish = time; p.tat = p.finish - p.arrival; p.wt = p.tat - p.burst;
+                timeline.push({ id: `P${p.id}`, start, end: time });
+            });
+            return { procs: sorted, timeline };
+        }
+
+        function solveSJF(procs) {
+            let time = 0, finished = [], timeline = [], pool = procs.map(p => ({...p}));
+            while (finished.length < procs.length) {
+                let av = pool.filter(p => p.arrival <= time && p.finish === undefined).sort((a, b) => a.burst - b.burst || a.arrival - b.arrival);
+                if (av.length === 0) {
+                    let next = Math.min(...pool.filter(p => p.finish === undefined).map(p => p.arrival));
+                    timeline.push({ id: 'Idle', start: time, end: next }); time = next; continue;
+                }
+                let p = av[0]; timeline.push({ id: `P${p.id}`, start: time, end: time + p.burst });
+                time += p.burst; p.finish = time; p.tat = p.finish - p.arrival; p.wt = p.tat - p.burst; finished.push(p);
+            }
+            return { procs: finished, timeline };
+        }
+
+        function solveSRTF(procs) {
+            let time = 0, timeline = [], pool = procs.map(p => ({ ...p, remaining: p.burst })), finished = [];
+            let current = null, startSeg = 0;
+            while (finished.length < procs.length) {
+                let ar = pool.filter(p => p.arrival <= time && p.remaining > 0).sort((a, b) => a.remaining - b.remaining || a.arrival - b.arrival);
+                if (ar.length === 0) {
+                    if (current) { timeline.push({ id: `P${current.id}`, start: startSeg, end: time }); current = null; }
+                    let n = Math.min(...pool.filter(p => p.remaining > 0).map(p => p.arrival));
+                    timeline.push({ id: 'Idle', start: time, end: n }); time = n; startSeg = n; continue;
+                }
+                let best = ar[0];
+                if (current && best.id !== current.id) { timeline.push({ id: `P${current.id}`, start: startSeg, end: time }); current = best; startSeg = time; }
+                else if (!current) { current = best; startSeg = time; }
+                let fut = pool.filter(p => p.arrival > time && p.remaining > 0);
+                let nextEvent = time + current.remaining;
+                if (fut.length > 0) nextEvent = Math.min(nextEvent, Math.min(...fut.map(p => p.arrival)));
+                current.remaining -= (nextEvent - time); time = nextEvent;
+                if (current.remaining === 0) {
+                    current.finish = time; current.tat = current.finish - current.arrival; current.wt = current.tat - current.burst;
+                    finished.push(current); timeline.push({ id: `P${current.id}`, start: startSeg, end: time }); current = null; startSeg = time;
+                }
+            }
+            return { procs: finished, timeline: cleanTimeline(timeline) };
+        }
+
+        function solvePriority(procs) {
+            let time = 0, finished = [], timeline = [], pool = procs.map(p => ({...p}));
+            while (finished.length < procs.length) {
+                let av = pool.filter(p => p.arrival <= time && p.finish === undefined).sort((a, b) => a.priority - b.priority || a.arrival - b.arrival);
+                if (av.length === 0) {
+                    let next = Math.min(...pool.filter(p => p.finish === undefined).map(p => p.arrival));
+                    timeline.push({ id: 'Idle', start: time, end: next }); time = next; continue;
+                }
+                let p = av[0]; timeline.push({ id: `P${p.id}`, start: time, end: time + p.burst });
+                time += p.burst; p.finish = time; p.tat = p.finish - p.arrival; p.wt = p.tat - p.burst; finished.push(p);
+            }
+            return { procs: finished, timeline };
+        }
+
+        function solvePriorityPreemptive(procs) {
+            let time = 0, timeline = [], pool = procs.map(p => ({ ...p, remaining: p.burst })), finished = [];
+            let current = null, startSeg = 0;
+            while (finished.length < procs.length) {
+                let ar = pool.filter(p => p.arrival <= time && p.remaining > 0).sort((a, b) => a.priority - b.priority || a.arrival - b.arrival);
+                if (ar.length === 0) {
+                    if (current) { timeline.push({ id: `P${current.id}`, start: startSeg, end: time }); current = null; }
+                    let n = Math.min(...pool.filter(p => p.remaining > 0).map(p => p.arrival));
+                    timeline.push({ id: 'Idle', start: time, end: n }); time = n; startSeg = n; continue;
+                }
+                let best = ar[0];
+                if (current && best.id !== current.id) { timeline.push({ id: `P${current.id}`, start: startSeg, end: time }); current = best; startSeg = time; }
+                else if (!current) { current = best; startSeg = time; }
+                let fut = pool.filter(p => p.arrival > time && p.remaining > 0);
+                let nextEvent = time + current.remaining;
+                if (fut.length > 0) nextEvent = Math.min(nextEvent, Math.min(...fut.map(p => p.arrival)));
+                current.remaining -= (nextEvent - time); time = nextEvent;
+                if (current.remaining === 0) {
+                    current.finish = time; current.tat = current.finish - current.arrival; current.wt = current.tat - current.burst;
+                    finished.push(current); timeline.push({ id: `P${current.id}`, start: startSeg, end: time }); current = null; startSeg = time;
+                }
+            }
+            return { procs: finished, timeline: cleanTimeline(timeline) };
+        }
+
+        function solveRR(procs, q) {
+            let time = 0, timeline = [], queue = [], pool = procs.map(p => ({ ...p, remaining: p.burst, inQueue: false })), finCount = 0;
+            pool.sort((a, b) => a.arrival - b.arrival || a.id - b.id);
+            while (finCount < procs.length) {
+                pool.forEach(p => { if (p.arrival <= time && p.remaining > 0 && !p.inQueue && p.finish === undefined) { queue.push(p); p.inQueue = true; } });
+                if (queue.length === 0) {
+                    let rem = pool.filter(p => p.remaining > 0);
+                    if (rem.length > 0) { let next = Math.min(...rem.map(p => p.arrival)); timeline.push({ id: 'Idle', start: time, end: next }); time = next; continue; }
+                    break;
+                }
+                let p = queue.shift(); p.inQueue = false;
+                let slice = Math.min(p.remaining, q);
+                timeline.push({ id: `P${p.id}`, start: time, end: time + slice });
+                let oldTime = time; time += slice; p.remaining -= slice;
+                pool.forEach(pNew => { if (pNew.arrival > oldTime && pNew.arrival <= time && pNew.remaining > 0 && !pNew.inQueue && pNew !== p && pNew.finish === undefined) { queue.push(pNew); pNew.inQueue = true; } });
+                if (p.remaining > 0) { queue.push(p); p.inQueue = true; } 
+                else { p.finish = time; p.tat = p.finish - p.arrival; p.wt = p.tat - p.burst; finCount++; }
+            }
+            return { procs: pool, timeline };
+        }
+
+        function cleanTimeline(timeline) {
+            if (timeline.length === 0) return [];
+            let clean = [], curr = { ...timeline[0] };
+            for (let i = 1; i < timeline.length; i++) {
+                if (timeline[i].id === curr.id) curr.end = timeline[i].end;
+                else { if (curr.start !== curr.end) clean.push(curr); curr = { ...timeline[i] }; }
+            }
+            if (curr.start !== curr.end) clean.push(curr);
+            return clean;
+        }
+
+        function runSimulation() {
+            const btn = document.getElementById('runBtn');
+            const quantum = parseInt(document.getElementById('timeQuantum').value) || 2;
+            btn.disabled = true;
+            setTimeout(() => {
+                results.FCFS = solveFCFS([...processes]);
+                results.SJF = solveSJF([...processes]); 
+                results.SRTF = solveSRTF([...processes]);
+                results.Priority = solvePriority([...processes]);
+                results.PriorityPre = solvePriorityPreemptive([...processes]);
+                results.RR = solveRR([...processes], quantum);
+                renderOutput();
+                btn.disabled = false;
+            }, 50);
+        }
+
+        function updateTab(algo) {
+            currentAlgo = algo;
+            document.querySelectorAll('#algoTabs button').forEach(b => b.classList.remove('tab-active'));
+            const clicked = [...document.querySelectorAll('#algoTabs button')].find(b => b.textContent.includes(algo.replace('Pre', '')));
+            if(clicked) clicked.classList.add('tab-active');
+            
+            const titles = { 'FCFS': 'First Come First Serve', 'SJF': 'Shortest Job First', 'SRTF': 'Shortest Remaining Time First', 'Priority': 'Priority Scheduling', 'PriorityPre': 'Priority (Pre)', 'RR': 'Round Robin' };
+            const info = { 'FCFS': 'Non-Preemptive', 'SJF': 'Non-Preemptive', 'SRTF': 'Preemptive', 'Priority': 'Non-Preemptive', 'PriorityPre': 'Preemptive', 'RR': 'Preemptive' };
+            document.getElementById('viewTitle').innerText = titles[algo];
+            document.getElementById('currentAlgoInfo').innerText = info[algo];
+            renderOutput();
+        }
+
+        function renderOutput() {
+            const data = results[currentAlgo];
+            if (!data) return;
+
+            const totalTime = data.timeline.length > 0 ? data.timeline[data.timeline.length - 1].end : 0;
+            const gantt = document.getElementById('ganttChart');
+            const timeline = document.getElementById('ganttTimeline');
+            const tableBody = document.getElementById('processTableBody');
+
+            const minWidth = Math.max(700, totalTime * 25); 
+            document.getElementById('ganttWrapper').style.minWidth = `${minWidth}px`;
+
+            const avgTat = (data.procs.reduce((s, p) => s + (p.tat || 0), 0) / processes.length).toFixed(2);
+            const avgWt = (data.procs.reduce((s, p) => s + (p.wt || 0), 0) / processes.length).toFixed(2);
+            document.getElementById('avgTatDisplay').innerText = avgTat;
+            document.getElementById('avgWtDisplay').innerText = avgWt;
+
+            // Render Gantt
+            gantt.innerHTML = data.timeline.map((t, idx) => {
+                const width = totalTime > 0 ? ((t.end - t.start) / totalTime) * 100 : 0;
+                const color = getProcessColor(t.id);
+                const isIdle = t.id === 'Idle';
+                const style = isIdle ? '' : `background-color: ${color};`;
+                const animClass = (idx % 2 === 0) ? 'gantt-bar-even' : 'gantt-bar-odd';
+                const delay = idx * 0.05;
+                
+                return `
+                <div class="gantt-bar ${animClass} ${isIdle ? 'bg-slate-200 dark:bg-slate-800' : 'text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2)]'} flex items-center justify-center text-[10px] font-bold border-r border-white/10 overflow-hidden" 
+                     style="width: ${width}%; ${style} animation-delay: ${delay}s">
+                    ${width > 2 ? t.id : ''}
+                </div>`;
+            }).join('');
+
+            timeline.innerHTML = `<span class="w-0">0</span>` + data.timeline.map(t => {
+                const width = totalTime > 0 ? ((t.end - t.start) / totalTime) * 100 : 0;
+                return `<span style="width: ${width}%" class="text-right pr-1 font-mono">${t.end}</span>`;
+            }).join('');
+
+            tableBody.innerHTML = [...data.procs].sort((a,b) => a.id - b.id).map(p => {
+                const color = getProcessColor(`P${p.id}`);
+                return `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td class="py-3 px-4 font-bold w-1/4">
+                        <span class="inline-block w-2 h-2 rounded-full mr-2" style="background-color: ${color}"></span>
+                        P${p.id}
+                    </td>
+                    <td class="px-2">${p.arrival}</td>
+                    <td class="px-2">${p.burst}</td>
+                    <td class="px-2 font-mono">${p.finish || 0}</td>
+                    <td class="px-2 font-semibold text-indigo-600 dark:text-indigo-400">${p.tat || 0}</td>
+                    <td class="px-4 font-semibold text-emerald-600 dark:text-emerald-400">${p.wt || 0}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        window.onload = () => { renderInputs(); runSimulation(); };
+    </script>
+</body>
