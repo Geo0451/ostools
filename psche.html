@@ -6,7 +6,21 @@
     <title>Process Scheduling Simulator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = { darkMode: 'class' }
+        tailwind.config = { darkMode: 'class' };
+        // Apply stored theme on load — default to dark
+        if (localStorage.getItem('theme') !== 'light') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        // Sync theme across all open tabs/pages
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'theme') {
+                e.newValue === 'dark'
+                    ? document.documentElement.classList.add('dark')
+                    : document.documentElement.classList.remove('dark');
+            }
+        });
     </script>
     <style>
         /* Alternating Gantt Animations */
@@ -60,7 +74,7 @@
                 <h1 class="text-4xl font-extrabold text-slate-800 dark:text-white mb-2">Process Scheduler</h1>
                 <p class="text-slate-600 dark:text-slate-400">Visualize CPU scheduling with Gantt charts.</p>
             </div>
-            <button onclick="document.documentElement.classList.toggle('dark')" class="p-3 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 hover:scale-110 transition">
+            <button onclick="toggleTheme()" class="p-3 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 hover:scale-110 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" />
                 </svg>
@@ -186,6 +200,11 @@
     </div>
 
     <script>
+        function toggleTheme() {
+            const dark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', dark ? 'dark' : 'light');
+        }
+
         let processes = [
             { id: 1, arrival: 0, burst: 8, priority: 2 },
             { id: 2, arrival: 1, burst: 4, priority: 1 },
@@ -210,11 +229,13 @@
             const id = processes.length > 0 ? Math.max(...processes.map(p => p.id)) + 1 : 1;
             processes.push({ id, arrival: 0, burst: 5, priority: 1 });
             renderInputs();
+            saveProcInputs();
         }
 
         function resetProcesses() {
             processes = [{ id: 1, arrival: 0, burst: 5, priority: 1 }];
             renderInputs();
+            saveProcInputs();
         }
 
         function renderInputs() {
@@ -233,6 +254,23 @@
 
         function updateP(index, field, value) {
             processes[index][field] = parseInt(value) || 0;
+            saveProcInputs();
+        }
+
+        function saveProcInputs() {
+            localStorage.setItem('proc_processes', JSON.stringify(processes));
+            const q = document.getElementById('timeQuantum');
+            if (q) localStorage.setItem('proc_quantum', q.value);
+        }
+
+        function loadProcInputs() {
+            const saved = localStorage.getItem('proc_processes');
+            if (saved) {
+                try { processes = JSON.parse(saved); } catch(e) {}
+            }
+            const q = localStorage.getItem('proc_quantum');
+            const el = document.getElementById('timeQuantum');
+            if (q !== null && el) el.value = q;
         }
 
         /* --- Schedulers --- */
@@ -359,6 +397,7 @@
         }
 
         function runSimulation() {
+            saveProcInputs();
             const btn = document.getElementById('runBtn');
             const quantum = parseInt(document.getElementById('timeQuantum').value) || 2;
             btn.disabled = true;
@@ -442,6 +481,6 @@
             }).join('');
         }
 
-        window.onload = () => { renderInputs(); runSimulation(); };
+        window.onload = () => { loadProcInputs(); renderInputs(); runSimulation(); };
     </script>
 </body>

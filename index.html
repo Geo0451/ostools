@@ -6,25 +6,25 @@
     <title>OS Simulator Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = { darkMode: 'class' }
-        // Theme persistence logic
-        function initTheme() {
-            if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
+        tailwind.config = { darkMode: 'class' };
+        // Apply stored theme on load — default to dark
+        if (localStorage.getItem('theme') !== 'light') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
         }
         function toggleTheme() {
-            if (document.documentElement.classList.contains('dark')) {
-                document.documentElement.classList.remove('dark');
-                localStorage.setItem('theme', 'light');
-            } else {
-                document.documentElement.classList.add('dark');
-                localStorage.setItem('theme', 'dark');
-            }
+            const dark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', dark ? 'dark' : 'light');
         }
-        initTheme();
+        // Sync theme across all open tabs/pages
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'theme') {
+                e.newValue === 'dark'
+                    ? document.documentElement.classList.add('dark')
+                    : document.documentElement.classList.remove('dark');
+            }
+        });
     </script>
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 min-h-screen font-sans text-slate-900 dark:text-slate-100 transition-colors">

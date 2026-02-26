@@ -6,9 +6,21 @@
     <title>Disk Scheduling Graph Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = {
-            darkMode: 'class',
+        tailwind.config = { darkMode: 'class' };
+        // Apply stored theme on load — default to dark
+        if (localStorage.getItem('theme') !== 'light') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
         }
+        // Sync theme across all open tabs/pages
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'theme') {
+                e.newValue === 'dark'
+                    ? document.documentElement.classList.add('dark')
+                    : document.documentElement.classList.remove('dark');
+            }
+        });
     </script>
     <style>
         .path-line { 
@@ -165,8 +177,27 @@
         let simulationData = {};
 
         function toggleDarkMode() {
-            document.documentElement.classList.toggle('dark');
+            const dark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', dark ? 'dark' : 'light');
             renderGraph();
+        }
+
+        function saveDiskInputs() {
+            localStorage.setItem('disk_queue', document.getElementById('inputQueue').value);
+            localStorage.setItem('disk_head', document.getElementById('inputHead').value);
+            localStorage.setItem('disk_max', document.getElementById('inputMax').value);
+            localStorage.setItem('disk_dir', document.getElementById('inputDir').value);
+        }
+
+        function loadDiskInputs() {
+            const queue = localStorage.getItem('disk_queue');
+            const head  = localStorage.getItem('disk_head');
+            const max   = localStorage.getItem('disk_max');
+            const dir   = localStorage.getItem('disk_dir');
+            if (queue !== null) document.getElementById('inputQueue').value = queue;
+            if (head  !== null) document.getElementById('inputHead').value  = head;
+            if (max   !== null) document.getElementById('inputMax').value   = max;
+            if (dir   !== null) document.getElementById('inputDir').value   = dir;
         }
 
         // Calculation helper for thm with steps
@@ -269,6 +300,7 @@
         }
 
         function generateGraphs() {
+            saveDiskInputs();
             const queueRaw = document.getElementById('inputQueue').value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
             const head = parseInt(document.getElementById('inputHead').value);
             let max = parseInt(document.getElementById('inputMax').value);
@@ -400,7 +432,7 @@
             });
         }
 
-        window.onload = generateGraphs;
+        window.onload = () => { loadDiskInputs(); generateGraphs(); };
     </script>
 </body>
 </html>
