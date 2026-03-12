@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Replacement Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' };
+        if (localStorage.getItem('theme') !== 'light') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'theme') {
+                if (e.newValue === 'dark') document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+            }
+        });
+    </script>
+    <style>
+        .tab-active { border-b-4 border-violet-600; color: #7c3aed; }
+        .dark .tab-active { border-b-4 border-violet-400; color: #a78bfa; }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 min-h-screen font-sans text-slate-900 dark:text-slate-100 transition-colors">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="text-center md:text-left">
+                <h1 class="text-4xl font-extrabold text-slate-800 dark:text-white mb-2">Page Replacement Visualizer</h1>
+                <p class="text-slate-600 dark:text-slate-400">Simulate FIFO, LRU, and Optimal replacement with frame-by-frame states.</p>
+            </div>
+            <button onclick="toggleTheme()" class="p-3 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 hover:scale-110 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500 hidden dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" />
+                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-700 block dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+            </button>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <aside class="lg:col-span-3 space-y-6">
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+                    <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                        Configuration
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Reference String</label>
+                            <input id="inputRefs" type="text" value="7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3, 2" class="w-full p-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none transition">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Frame Count</label>
+                            <input id="inputFrames" type="number" min="1" value="3" class="w-full p-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none transition">
+                        </div>
+                        <button onclick="runSimulation()" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transform transition active:scale-95">
+                            Run Simulation
+                        </button>
+                    </div>
+                </div>
+
+                <div id="statsPanel" class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+                    <h2 class="text-lg font-bold mb-4">Page Fault Summary</h2>
+                    <div id="statsContent" class="text-sm space-y-2"></div>
+                </div>
+            </aside>
+
+            <main class="lg:col-span-9 space-y-6">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
+                    <div class="flex border-b dark:border-slate-700 overflow-x-auto scrollbar-thin" id="tabsHeader">
+                        <button onclick="switchTab('FIFO')" id="tab-FIFO" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition tab-active">FIFO</button>
+                        <button onclick="switchTab('LRU')" id="tab-LRU" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">LRU</button>
+                        <button onclick="switchTab('OPTIMAL')" id="tab-OPTIMAL" class="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition">Optimal</button>
+                    </div>
+
+                    <div class="p-6 space-y-6">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center gap-2">
+                            <h3 id="currentAlgoTitle" class="text-2xl font-bold text-slate-800 dark:text-white">FIFO</h3>
+                            <p id="faultRate" class="text-sm font-semibold text-violet-600 dark:text-violet-400">Fault Rate: 0%</p>
+                        </div>
+
+                        <div class="overflow-auto scrollbar-thin rounded-xl border border-slate-200 dark:border-slate-700">
+                            <table id="frameTable" class="w-full text-sm border-collapse min-w-[720px]"></table>
+                        </div>
+
+                        <div id="stepsPanel" class="space-y-2 max-h-[250px] overflow-y-auto scrollbar-thin"></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 dark:bg-slate-950 text-white p-6 rounded-2xl shadow-lg border border-slate-700">
+                    <h3 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-2">Reference Sequence</h3>
+                    <p id="sequenceDisplay" class="font-mono text-lg break-all text-violet-400 leading-relaxed">Waiting...</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        let currentAlgorithm = 'FIFO';
+        let simulationData = {};
+
+        function toggleTheme() {
+            const dark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', dark ? 'dark' : 'light');
+        }
+
+        function savePagerInputs() {
+            localStorage.setItem('pager_refs', document.getElementById('inputRefs').value);
+            localStorage.setItem('pager_frames', document.getElementById('inputFrames').value);
+        }
+
+        function loadPagerInputs() {
+            const refs = localStorage.getItem('pager_refs');
+            const frames = localStorage.getItem('pager_frames');
+            if (refs !== null) document.getElementById('inputRefs').value = refs;
+            if (frames !== null) document.getElementById('inputFrames').value = frames;
+        }
+
+        function parseInput() {
+            const refs = document.getElementById('inputRefs').value
+                .split(',')
+                .map(n => parseInt(n.trim()))
+                .filter(n => !isNaN(n));
+            const frameCount = Math.max(1, parseInt(document.getElementById('inputFrames').value) || 1);
+            return { refs, frameCount };
+        }
+
+        function buildResult(refs, frameCount, steps) {
+            const faults = steps.filter(s => s.fault).length;
+            const hits = refs.length - faults;
+            return {
+                refs,
+                frameCount,
+                steps,
+                faults,
+                hits,
+                faultRate: refs.length === 0 ? 0 : ((faults / refs.length) * 100)
+            };
+        }
+
+        function simulateFIFO(refs, frameCount) {
+            const frames = [];
+            let pointer = 0;
+            const steps = [];
+
+            refs.forEach((page, index) => {
+                const hit = frames.includes(page);
+                let replaced = null;
+                if (!hit) {
+                    if (frames.length < frameCount) {
+                        frames.push(page);
+                    } else {
+                        replaced = frames[pointer];
+                        frames[pointer] = page;
+                        pointer = (pointer + 1) % frameCount;
+                    }
+                }
+                steps.push({
+                    index,
+                    page,
+                    hit,
+                    fault: !hit,
+                    replaced,
+                    frames: [...frames]
+                });
+            });
+
+            return buildResult(refs, frameCount, steps);
+        }
+
+        function simulateLRU(refs, frameCount) {
+            const frames = [];
+            const lastUsed = new Map();
+            const steps = [];
+
+            refs.forEach((page, index) => {
+                const hit = frames.includes(page);
+                let replaced = null;
+
+                if (!hit) {
+                    if (frames.length < frameCount) {
+                        frames.push(page);
+                    } else {
+                        let lruPage = frames[0];
+                        let lruIndex = lastUsed.get(lruPage) ?? -1;
+                        frames.forEach(fp => {
+                            const usedAt = lastUsed.get(fp) ?? -1;
+                            if (usedAt < lruIndex) {
+                                lruIndex = usedAt;
+                                lruPage = fp;
+                            }
+                        });
+                        const replacePos = frames.indexOf(lruPage);
+                        replaced = frames[replacePos];
+                        frames[replacePos] = page;
+                    }
+                }
+
+                lastUsed.set(page, index);
+                steps.push({
+                    index,
+                    page,
+                    hit,
+                    fault: !hit,
+                    replaced,
+                    frames: [...frames]
+                });
+            });
+
+            return buildResult(refs, frameCount, steps);
+        }
+
+        function simulateOptimal(refs, frameCount) {
+            const frames = [];
+            const steps = [];
+
+            refs.forEach((page, index) => {
+                const hit = frames.includes(page);
+                let replaced = null;
+
+                if (!hit) {
+                    if (frames.length < frameCount) {
+                        frames.push(page);
+                    } else {
+                        let farthest = -1;
+                        let victim = frames[0];
+
+                        frames.forEach(fp => {
+                            const nextUse = refs.slice(index + 1).indexOf(fp);
+                            if (nextUse === -1) {
+                                victim = fp;
+                                farthest = Infinity;
+                            } else if (farthest !== Infinity && nextUse > farthest) {
+                                farthest = nextUse;
+                                victim = fp;
+                            }
+                        });
+
+                        const replacePos = frames.indexOf(victim);
+                        replaced = frames[replacePos];
+                        frames[replacePos] = page;
+                    }
+                }
+
+                steps.push({
+                    index,
+                    page,
+                    hit,
+                    fault: !hit,
+                    replaced,
+                    frames: [...frames]
+                });
+            });
+
+            return buildResult(refs, frameCount, steps);
+        }
+
+        function runSimulation() {
+            savePagerInputs();
+            const { refs, frameCount } = parseInput();
+
+            simulationData = {
+                FIFO: simulateFIFO(refs, frameCount),
+                LRU: simulateLRU(refs, frameCount),
+                OPTIMAL: simulateOptimal(refs, frameCount)
+            };
+
+            updateStats();
+            renderCurrentAlgorithm();
+        }
+
+        function updateStats() {
+            const stats = document.getElementById('statsContent');
+            stats.innerHTML = '';
+            ['FIFO', 'LRU', 'OPTIMAL'].forEach(algo => {
+                const data = simulationData[algo];
+                const row = document.createElement('div');
+                row.className = 'flex justify-between items-center p-2.5 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700';
+                row.innerHTML = `<span class="font-medium">${algo}</span><span class="text-violet-600 dark:text-violet-400 font-bold">${data.faults} faults</span>`;
+                stats.appendChild(row);
+            });
+        }
+
+        function switchTab(algo) {
+            currentAlgorithm = algo;
+            document.querySelectorAll('#tabsHeader button').forEach(btn => btn.classList.remove('tab-active'));
+            document.getElementById(`tab-${algo}`).classList.add('tab-active');
+            renderCurrentAlgorithm();
+        }
+
+        function renderCurrentAlgorithm() {
+            const data = simulationData[currentAlgorithm];
+            if (!data) return;
+
+            const titleMap = {
+                FIFO: 'First In First Out (FIFO)',
+                LRU: 'Least Recently Used (LRU)',
+                OPTIMAL: 'Optimal Replacement'
+            };
+
+            document.getElementById('currentAlgoTitle').innerText = titleMap[currentAlgorithm];
+            document.getElementById('faultRate').innerText = `Fault Rate: ${data.faultRate.toFixed(2)}%`;
+            document.getElementById('sequenceDisplay').innerText = data.refs.join(' → ');
+
+            renderFrameTable(data);
+            renderSteps(data);
+        }
+
+        function renderFrameTable(data) {
+            const table = document.getElementById('frameTable');
+            const refsRow = data.steps.map(step => `<th class="p-2 border border-slate-200 dark:border-slate-700 text-center text-xs font-bold">${step.page}</th>`).join('');
+
+            let rows = '';
+            for (let frame = 0; frame < data.frameCount; frame++) {
+                rows += `<tr><td class="p-2 border border-slate-200 dark:border-slate-700 font-semibold bg-slate-50 dark:bg-slate-700/40">Frame ${frame + 1}</td>`;
+                data.steps.forEach(step => {
+                    const value = step.frames[frame] ?? '-';
+                    rows += `<td class="p-2 border border-slate-200 dark:border-slate-700 text-center font-mono">${value}</td>`;
+                });
+                rows += '</tr>';
+            }
+
+            const faultRow = data.steps.map(step => {
+                const cls = step.fault ? 'text-red-500 font-bold' : 'text-emerald-500 font-bold';
+                return `<td class="p-2 border border-slate-200 dark:border-slate-700 text-center ${cls}">${step.fault ? 'F' : 'H'}</td>`;
+            }).join('');
+
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th class="p-2 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-700/60 text-left">Ref</th>
+                        ${refsRow}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows}
+                    <tr>
+                        <td class="p-2 border border-slate-200 dark:border-slate-700 font-semibold bg-slate-50 dark:bg-slate-700/40">Fault/Hit</td>
+                        ${faultRow}
+                    </tr>
+                </tbody>
+            `;
+        }
+
+        function renderSteps(data) {
+            const stepsPanel = document.getElementById('stepsPanel');
+            stepsPanel.innerHTML = '';
+
+            data.steps.forEach((step, idx) => {
+                const card = document.createElement('div');
+                const outcomeClass = step.fault
+                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                    : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800';
+                card.className = `p-3 rounded-lg border ${outcomeClass} flex items-center justify-between`;
+                const rhs = step.fault
+                    ? (step.replaced === null ? 'Loaded into free frame' : `Replaced ${step.replaced}`)
+                    : 'Page already present';
+                card.innerHTML = `
+                    <div>
+                        <p class="font-semibold text-sm">Step ${idx + 1}: Request ${step.page}</p>
+                        <p class="text-xs text-slate-600 dark:text-slate-300">Frames: [${step.frames.join(', ')}]</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm font-bold ${step.fault ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}">${step.fault ? 'FAULT' : 'HIT'}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">${rhs}</p>
+                    </div>
+                `;
+                stepsPanel.appendChild(card);
+            });
+
+            const total = document.createElement('div');
+            total.className = 'mt-3 p-4 rounded-xl bg-violet-600 text-white font-bold flex justify-between items-center shadow-lg';
+            total.innerHTML = `<span>Total Faults</span><span>${data.faults}</span>`;
+            stepsPanel.appendChild(total);
+        }
+
+        window.onload = () => {
+            loadPagerInputs();
+            runSimulation();
+        };
+    </script>
+</body>
+</html>
